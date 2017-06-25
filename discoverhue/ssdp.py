@@ -1,4 +1,5 @@
-#   Copyright 2014 Dan Krause, Python 3 hack 2016 Adam Baxter
+#   Copyright 2014 Dan Krause, Python 3 hack 2016 Adam Baxter,
+#       Server field addition and Win32 mod 2017 Andre Wagner
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -46,7 +47,7 @@ def discover(service, timeout=5, retries=1, mx=3):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
 
-        # see https://stackoverflow.com/questions/32682969/windows-ssdp-discovery-service-throttling-outgoing-ssdp-broadcasts
+        # see https://stackoverflow.com/questions/32682969
         if sys.platform == "win32":
             host = socket.gethostbyname(socket.gethostname())
             sock.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
