@@ -15,7 +15,6 @@
 import socket
 import http.client
 import io
-import sys
 
 class SSDPResponse(object):
     class _FakeSocket(io.BytesIO):
@@ -28,9 +27,8 @@ class SSDPResponse(object):
         self.usn = r.getheader("usn")
         self.st = r.getheader("st")
         self.cache = r.getheader("cache-control").split("=")[1]
-        self.server = r.getheader("server")
     def __repr__(self):
-        return "<SSDPResponse({location}, {st}, {usn}, {server})>".format(**self.__dict__)
+        return "<SSDPResponse({location}, {st}, {usn})>".format(**self.__dict__)
 
 def discover(service, timeout=5, retries=1, mx=3):
     group = ("239.255.255.250", 1900)
@@ -45,14 +43,6 @@ def discover(service, timeout=5, retries=1, mx=3):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-
-        # see https://stackoverflow.com/questions/32682969/windows-ssdp-discovery-service-throttling-outgoing-ssdp-broadcasts
-        if sys.platform == "win32":
-            host = socket.gethostbyname(socket.gethostname())
-            sock.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
-            sock.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP,
-                            socket.inet_aton(group[0]) + socket.inet_aton(host))
-
         message_bytes = message.format(*group, st=service, mx=mx).encode('utf-8')
         sock.sendto(message_bytes, group)
 
