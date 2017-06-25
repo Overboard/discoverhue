@@ -48,38 +48,69 @@ if __name__ is not '__main__':
 Bridge = namedtuple('Bridge', ['ip', 'icon', 'user'])
 
 def from_url(location):
-    """ HTTP request for page at location returned as string"""
+    """ HTTP request for page at location returned as string
+
+    malformed url returns ValueError
+    nonexistant IP returns URLError
+    wrong subnet IP return URLError
+    reachable IP, no HTTP server returns URLError
+    reachable IP, HTTP, wrong page returns HTTPError
+    """
     req = urllib.request.Request(location)
     with urllib.request.urlopen(req) as response:
         the_page = response.read().decode()
         return the_page
 
-def parse_description_xml(xml_str):
-    """ Extract serial number, base ip, and img url from description.xml """
-    # TODO: add error handling
-    # may return AttributeError if XML fails
-    #
-    # Refer to included example for URLBase and serialNumber elements
-    root = ET.fromstring(xml_str)
-    rootname = {'root': root.tag[root.tag.find('{')+1:root.tag.find('}')]}
-    baseip = root.find('root:URLBase', rootname).text
-    device = root.find('root:device', rootname)
-    serial = device.find('root:serialNumber', rootname).text
-    anicon = device.find('root:iconList', rootname).find('root:icon', rootname)
-    imgurl = anicon.find('root:url', rootname).text
-    return serial, Bridge(ip=baseip, icon=imgurl, user=None)
+def parse_description_xml(location):
+    """ Extract serial number, base ip, and img url from description.xml
 
-def parse_portal_json(json_str):
+    missing data from XML returns AttributeError 
+    malformed XML returns ParseError
+
+    Refer to included example for URLBase and serialNumber elements
+    """
+
+    # TODO: review error handling on xml
+    # may want to suppress ParseError in the event that it was caused
+    # by a none bridge device although this seems unlikely
+    try:
+        xml_str = from_url(location)
+    except urllib.request.HTTPError as error:
+        logging.info("No description for %s: %s", location, error)
+        return None, error
+    except urllib.request.URLError as error:
+        logging.info("No HTTP server for %s: %s", location, error)
+        return None, error
+    else:
+        root = ET.fromstring(xml_str)
+        rootname = {'root': root.tag[root.tag.find('{')+1:root.tag.find('}')]}
+        baseip = root.find('root:URLBase', rootname).text
+        device = root.find('root:device', rootname)
+        serial = device.find('root:serialNumber', rootname).text
+        anicon = device.find('root:iconList', rootname).find('root:icon', rootname)
+        imgurl = anicon.find('root:url', rootname).text
+        return serial, Bridge(ip=baseip, icon=imgurl, user=None)
+
+def parse_portal_json():
     """ Extract serial number, ip from https://www.meethue.com/api/nupnp """
-    portal_list = []
-    json_list = json.loads(json_str)
-    for bridge in json_list:
-        baseip = bridge['internalipaddress']
-        baseip = baseip if baseip[0:4].lower() == 'http' else 'http://'+baseip
-        baseip = baseip if baseip[-4:].lower() == '.xml' else baseip+'/description.xml'
-        serial = bridge['id']
-        portal_list.append((serial, baseip))
-    return portal_list
+    try:
+        json_str = from_url('https://www.meethue.com/api/nupnp')
+    except urllib.request.HTTPError as error:
+        logging.error("Problem at portal: %s", error)
+        raise
+    except urllib.request.URLError as error:
+        logging.warning("Problem reaching portal: %s", error)
+        return []
+    else:
+        portal_list = []
+        json_list = json.loads(json_str)
+        for bridge in json_list:
+            baseip = bridge['internalipaddress']
+            baseip = baseip if baseip[0:4].lower() == 'http' else 'http://'+baseip
+            baseip = baseip if baseip[-4:].lower() == '.xml' else baseip+'/description.xml'
+            serial = bridge['id']
+            portal_list.append((serial, baseip))
+        return portal_list
 
 def via_upnp():
     """ Use SSDP as described by the Philips guide """
@@ -94,7 +125,7 @@ def via_upnp():
     # location.  Should look like: http://192.168.0.1:80/description.xml
     found_bridges = {}
     for bridge in bridges_from_ssdp:
-        serial, bridge_info = parse_description_xml(from_url(bridge.location))
+        serial, bridge_info = parse_description_xml(bridge.location)
         if serial:
             found_bridges[serial] = bridge_info
 
@@ -103,14 +134,14 @@ def via_upnp():
 
 def via_nupnp():
     """ Use method 2 as described by the Philips guide """
-    bridges_from_portal = parse_portal_json(from_url('https://www.meethue.com/api/nupnp'))
+    bridges_from_portal = parse_portal_json()
     logging.info('Portal returned %d Hue bridges(s).',
                  len(bridges_from_portal))
     # Confirm Portal gave an accessible bridge device by reading from the returned
     # location.  Should look like: http://192.168.0.1:80/description.xml
     found_bridges = {}
     for bridge in bridges_from_portal:
-        serial, bridge_info = parse_description_xml(from_url(bridge[1]))
+        serial, bridge_info = parse_description_xml(bridge[1])
         if serial:
             found_bridges[serial] = bridge_info
 

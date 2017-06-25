@@ -1,21 +1,21 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <root xmlns="urn:schemas-upnp-org:device-1-0">
 <specVersion>
 <major>1</major>
 <minor>0</minor>
 </specVersion>
-<URLBase>http://192.168.0.1:80/</URLBase>
+<URLBase>http://192.168.0.23:80/</URLBase>
 <device>
 <deviceType>urn:schemas-upnp-org:device:Basic:1</deviceType>
-<friendlyName>Philips hue (192.168.0.1)</friendlyName>
+<friendlyName>Philips hue (192.168.0.23)</friendlyName>
 <manufacturer>Royal Philips Electronics</manufacturer>
 <manufacturerURL>http://www.philips.com</manufacturerURL>
 <modelDescription>Philips hue Personal Wireless Lighting</modelDescription>
 <modelName>Philips hue bridge 2015</modelName>
 <modelNumber>BSB002</modelNumber>
 <modelURL>http://www.meethue.com</modelURL>
-<serialNumber>0123456789ab</serialNumber>
-<UDN>uuid:2f402f80-da50-11e1-9b23-0123456789ab</UDN>
+<serialNumber>0017884e7dad</serialNumber>
+<UDN>uuid:2f402f80-da50-11e1-9b23-0017884e7dad</UDN>
 <presentationURL>index.html</presentationURL>
 <iconList>
 <icon>
@@ -23,14 +23,14 @@
 <height>48</height>
 <width>48</width>
 <depth>24</depth>
-<url_typo>hue_logo_0.png</url_typo>
+<url>hue_logo_0.png</url>
 </icon>
 <icon>
 <mimetype>image/png</mimetype>
 <height>120</height>
 <width>120</width>
 <depth>24</depth>
-<url_typo>hue_logo_3.png</url_typo>
+<url>hue_logo_3.png</url>
 </icon>
 </iconList>
 </device>
