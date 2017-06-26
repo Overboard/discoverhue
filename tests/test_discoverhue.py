@@ -1,6 +1,7 @@
 """ Test suite for discoverhue """
 
 # TODO: consolidate scenario data
+# by creating a comprehensive mock for from_url
 import doctest
 import unittest
 from unittest.mock import patch, Mock
