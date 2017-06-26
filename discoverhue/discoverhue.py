@@ -158,6 +158,7 @@ def get_hue_bridges(prior_bridges=None, create_new_as=None):
     """ Locate Philips Hue bridges
 
     TODO: more verbosity here
+    TODO: check for provided bridges before discovery
     """
     found_bridges = {}
     found_bridges.update(via_upnp())
