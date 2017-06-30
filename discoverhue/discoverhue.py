@@ -92,7 +92,11 @@ def parse_description_xml(location):
         return serial, Bridge(ip=baseip, icon=imgurl, user=None)
 
 def parse_portal_json():
-    """ Extract serial number, ip from https://www.meethue.com/api/nupnp """
+    """ Extract id, ip from https://www.meethue.com/api/nupnp
+    
+    Note: the ip is only the base and needs xml file appended, and
+    the id is not exactly the same as the serial number in the xml
+    """
     try:
         json_str = from_url('https://www.meethue.com/api/nupnp')
     except urllib.request.HTTPError as error:
