@@ -91,8 +91,11 @@ def parse_description_xml_mock(location):
     try:
         return parsed_xml_response[location]
     except KeyError:
+        # Missing test case, treat as unreachable IP
+        return None, urllib.request.URLError(location)
+        # TODO: remove ?
         # Missing test case, treat as test module error
-        raise Exception('Missing lookup for test')
+        # raise Exception('Missing lookup for test')
 
 url_dispatch = {
     'http://192.168.0.26:49152/0/description.xml':
@@ -106,7 +109,7 @@ url_dispatch = {
     'http://192.168.0.23:80/description.xml':
         'page = get_http_scenario("02_description.xml")',
     None:
-        'raise KeyError'
+        'raise ValueError'
 }
 
 # Note: SSDP returns the port number in the URL, while the Portal does not
@@ -132,7 +135,8 @@ parsed_portal_response = [
     ("001788fffe100491", "http://192.168.2.23/description.xml"),
     ("001788fffe09a168", "http://192.168.88.252/description.xml"),
     ("001788fffe16c18f", "http://192.168.2.20/description.xml"),
-    ("001788fffe4e7dad", "http://192.168.0.23/description.xml")
+    ("001788fffe4e7dad", "http://192.168.0.23/description.xml"),
+    ("001788fffe102201", "http://192.168.1.130/description.xml")
 ]
 
 #-----------------------------------------------------------------------------
@@ -157,6 +161,13 @@ class TestParseDescriptionXML(unittest.TestCase):
         """
         with self.assertRaises(ValueError):
             parse_description_xml('location')
+
+    @patch('discoverhue.discoverhue.from_url', side_effect=ValueError)
+    def test_none(self, url_mock):
+        """ Expect None to pass back the exception from urllib.requests
+        """
+        with self.assertRaises(ValueError):
+            parse_description_xml(None)
 
     @patch('discoverhue.discoverhue.from_url', side_effect=urllib.request.URLError(''))
     def test_nonexistent_ip(self, url_mock):
@@ -304,8 +315,17 @@ class TestNUPNPdiscovery(unittest.TestCase):
 
     Mocks required for portal response and XML request
     """
-
     @patch('discoverhue.discoverhue.parse_portal_json', return_value=parsed_portal_response)
+    def test_2in5(self, json_mock, xml_mock):
+        """ Portal returns 4 devices with one being a bridge """
+        found_bridges = via_nupnp()
+        self.assertEqual(xml_mock.call_count, 5)
+        self.assertEqual(json_mock.call_count, 1)
+        self.assertEqual(len(found_bridges), 2)
+        self.assertIn('0017884e7dad', found_bridges)
+        self.assertEqual(found_bridges['0017884e7dad'].ip, 'http://192.168.0.23:80/')
+
+    @patch('discoverhue.discoverhue.parse_portal_json', return_value=parsed_portal_response[0:4])
     def test_1in4(self, json_mock, xml_mock):
         """ Portal returns 4 devices with one being a bridge """
         found_bridges = via_nupnp()
@@ -332,6 +352,69 @@ class TestNUPNPdiscovery(unittest.TestCase):
         self.assertEqual(xml_mock.call_count, 3)
         self.assertEqual(json_mock.call_count, 1)
         self.assertEqual(len(found_bridges), 0)
+
+
+#-----------------------------------------------------------------------------
+# find_bridges
+#-----------------------------------------------------------------------------
+@patch('discoverhue.discoverhue.parse_description_xml', side_effect=parse_description_xml_mock)
+# @patch('discoverhue.discoverhue.ssdp_discover', return_value=get_ssdp_scenario('SSDP_1in4.pickle'))
+@patch('discoverhue.discoverhue.ssdp_discover', return_value=[])
+@patch('discoverhue.discoverhue.parse_portal_json', return_value=parsed_portal_response)
+class TestFindBridges(unittest.TestCase):
+    """ Unit tests for find_bridges entry point
+
+    Mocks for ssdp, portal, and xml
+    Simulate ssdp failover to portal, yielding 2 bridges reachable with xml
+    """
+
+    def test_find_bridges_01(self, json_mock, poll_mock, xml_mock):
+        """ with no parameters expect return of dict with two bridges """
+        found_bridges = find_bridges()
+        # confirm mock calls
+        self.assertEqual(json_mock.call_count, 1)
+        self.assertEqual(poll_mock.call_count, 1)
+        self.assertEqual(xml_mock.call_count, 5)
+        # confirm results
+        self.assertEqual(len(found_bridges), 2)
+        self.assertIn('0017884e7dad', found_bridges)
+        self.assertEqual(found_bridges['0017884e7dad'].ip, 'http://192.168.0.23:80/')
+
+    def test_find_bridges_02(self, json_mock, poll_mock, xml_mock):
+        """ with good serial number expect return of string with ip """
+        found_bridges = find_bridges('0017884e7dad')
+        self.assertEqual(found_bridges, 'http://192.168.0.23:80/')
+        found_bridges = find_bridges('001788102201')
+        self.assertEqual(found_bridges, 'http://192.168.1.130:80/')
+
+    def test_find_bridges_03(self, json_mock, poll_mock, xml_mock):
+        """ with missing serial expect return of none """
+        found_bridges = find_bridges('deadbeef')
+        self.assertEqual(found_bridges, None)
+
+    def test_find_bridges_04(self, json_mock, poll_mock, xml_mock):
+        """ with non-hashable input expect same as None """
+        found_bridges = find_bridges(['deadbeef', '0017884e7dad'])
+        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(len(found_bridges), 2)
+
+    @unittest.expectedFailure
+    def test_find_bridges_05(self, json_mock, poll_mock, xml_mock):
+        """ with empty non-hashable input expect same as None """
+        found_bridges = find_bridges({})
+        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(len(found_bridges), 2)
+        print(found_bridges)
+        # presently returning an empty dict
+
+    def test_find_bridges_06(self, json_mock, poll_mock, xml_mock):
+        """ with empty non-hashable input expect same as None """
+        known_bridges = {'0017884e7dad': Bridge('http://192.168.0.23:80/description.xml', None, None)}
+        found_bridges = find_bridges(known_bridges)
+        # self.assertIsInstance(found_bridges, dict)
+        # self.assertEqual(len(found_bridges), 2)
+        print(found_bridges)
+
 
 # doctest integration
 # def load_tests(loader, tests, ignore):
