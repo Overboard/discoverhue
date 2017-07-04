@@ -1,1 +1,1 @@
-from .discoverhue import get_hue_bridges, Bridge
+from .discoverhue import find_bridges, Bridge
