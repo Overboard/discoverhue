@@ -38,6 +38,7 @@ Enter discovery with ID
 """
 import logging
 import urllib.request
+from urllib.parse import urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
 import json
 from collections import namedtuple
@@ -45,8 +46,15 @@ from collections import namedtuple
 if __name__ is not '__main__':
     from discoverhue.ssdp import discover as ssdp_discover
 
-# TODO: default values on instantiation - change to class?
 Bridge = namedtuple('Bridge', ['ip', 'icon', 'user'])
+""" Bridge named tuple for storing info
+
+    ip    - base address string as found in URLBase of description file
+            assuming form scheme://netloc
+    icon  - first found icon file
+    user  - whitelist ID as provided by user
+"""
+    # """TODO: default values on instantiation - change to class?"""
 
 def from_url(location):
     """ HTTP request for page at location returned as string
@@ -65,13 +73,12 @@ def from_url(location):
 def parse_description_xml(location):
     """ Extract serial number, base ip, and img url from description.xml
 
-    missing data from XML returns AttributeError 
+    missing data from XML returns AttributeError
     malformed XML returns ParseError
 
     Refer to included example for URLBase and serialNumber elements
     """
-
-    # TODO: review error handling on xml
+    # """TODO: review error handling on xml"""
     # may want to suppress ParseError in the event that it was caused
     # by a none bridge device although this seems unlikely
     try:
@@ -96,6 +103,30 @@ def parse_description_xml(location):
         else:
             return None, None
 
+def _build_from(baseip):
+    """ Build URL for description.xml from ip """
+    # """TODO: don't really need the try/except"""
+    from ipaddress import ip_address
+    try:
+        ip_address(baseip)
+    except ValueError:
+        # """attempt to construct url but the ip format has changed"""
+        # logging.warning("Format of internalipaddress changed: %s", baseip)
+        if 'http' not in baseip[0:4].lower():
+            baseip = urlunsplit(['http', baseip, '', '', ''])
+        spl = urlsplit(baseip)
+        if '.xml' not in spl.path:
+            sep = '' if spl.path.endswith('/') else '/'
+            spl = spl._replace(path=spl.path+sep+'description.xml')
+        return spl.geturl()
+    else:
+        # construct url knowing baseip is a pure ip
+        return  urlunsplit(('http', baseip, '/description.xml', '', ''))
+    # alternatively:
+    # baseip = baseip if baseip[0:4].lower() == 'http' else 'http://'+baseip
+    # baseip = baseip if baseip[-4:].lower() == '.xml' else baseip+'/description.xml'
+    # return baseip
+
 def parse_portal_json():
     """ Extract id, ip from https://www.meethue.com/api/nupnp
 
@@ -114,11 +145,12 @@ def parse_portal_json():
         portal_list = []
         json_list = json.loads(json_str)
         for bridge in json_list:
-            baseip = bridge['internalipaddress']
-            baseip = baseip if baseip[0:4].lower() == 'http' else 'http://'+baseip
-            baseip = baseip if baseip[-4:].lower() == '.xml' else baseip+'/description.xml'
             serial = bridge['id']
-            portal_list.append((serial, baseip))
+            baseip = bridge['internalipaddress']
+            # baseip should look like "192.168.0.1"
+            xmlurl = _build_from(baseip)
+            # xmlurl should look like "http://192.168.0.1/description.xml"
+            portal_list.append((serial, xmlurl))
         return portal_list
 
 def via_upnp():
@@ -147,7 +179,7 @@ def via_nupnp():
     logging.info('Portal returned %d Hue bridges(s).',
                  len(bridges_from_portal))
     # Confirm Portal gave an accessible bridge device by reading from the returned
-    # location.  Should look like: http://192.168.0.1:80/description.xml
+    # location.  Should look like: http://192.168.0.1/description.xml
     found_bridges = {}
     for bridge in bridges_from_portal:
         serial, bridge_info = parse_description_xml(bridge[1])
@@ -179,7 +211,6 @@ def find_bridges(prior_bridges=None, create_new_as=None):
 
     # Validate caller's provided list
     try:
-        # TODO: there must be a better alternative
         prior_bridges_list = list(prior_bridges.items())
     except AttributeError:
         # if caller didnt provide dict then assume single SN or None
@@ -189,11 +220,10 @@ def find_bridges(prior_bridges=None, create_new_as=None):
         for prior_sn, prior_bridge in prior_bridges_list:
             if prior_sn is None:
                 continue
-            serial, bridge = parse_description_xml(prior_bridge.ip)
+            serial, bridge = parse_description_xml(_build_from(prior_bridge.ip))
             if serial == prior_sn:
                 # add to found with provided user
-                bridge._replace(user=prior_bridge.user)
-                found_bridges[serial] = bridge
+                found_bridges[serial] = bridge._replace(user=prior_bridge.user)
                 del prior_bridges[serial]
             elif serial:
                 # stumbled on another bridge, add to found
@@ -231,7 +261,9 @@ def find_bridges(prior_bridges=None, create_new_as=None):
             for serial in found_bridges:
                 try:
                     # update found bridge with whitelisted user from caller
-                    found_bridges[serial]._replace(user=prior_bridges[serial].user)
+                    prior_user = prior_bridges[serial].user
+                    combined = found_bridges[serial]._replace(user=prior_user)
+                    found_bridges[serial] = combined
                 except TypeError:
                     # presumably still dealing with user input that wasn't a dict
                     break
@@ -240,14 +272,8 @@ def find_bridges(prior_bridges=None, create_new_as=None):
                     continue
                 else:
                     del prior_bridges[serial]
-            # for serial in found_bridges:
-                # if serial in prior_bridges:
-                #     # update found bridge with whitelisted user from caller
-                #     found_bridges[serial]._replace(user=prior_bridges[serial].user)
-                #     del prior_bridges[serial]
         else:
-            # prior_bridges is None
-            # move on to whitelist checks
+            # prior_bridges is None, move on to whitelist checks
             pass
     else:
         # skip discovery, prior_bridges dict was emptied already
@@ -256,7 +282,7 @@ def find_bridges(prior_bridges=None, create_new_as=None):
     # prior_bridges is None, dict of unfound SNs, or empty dict
     # found_bridges is dict of found SNs or empty
 
-    # TODO: Any value in checking the whitelist validity even if not creating?
+    # """TODO: Any value in checking the whitelist validity even if not creating?""""
     if create_new_as:
         for serial in found_bridges:
             if valid_whitelist(found_bridges[serial]):
@@ -266,7 +292,7 @@ def find_bridges(prior_bridges=None, create_new_as=None):
     if prior_bridges is not None:
         for serial in prior_bridges:
             logging.warning('Could not locate bridge with Serial ID %s', serial)
-            # TODO: decide how to handle unresolved bridges
+            # """TODO: decide how to handle unresolved bridges""""
 
     return found_bridges
 
@@ -277,10 +303,10 @@ def check_bridges():
 
 if __name__ == '__main__':
     from ssdp import discover as ssdp_discover
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s.%(msecs)03d %(levelname)s:%(module)s:%(funcName)s: %(message)s',
-                        datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(level=logging.DEBUG,                                                 \
+        format='%(asctime)s.%(msecs)03d %(levelname)s:%(module)s:%(funcName)s: %(message)s', \
+        datefmt="%Y-%m-%d %H:%M:%S")
     # known = {'0017884e7dad': Bridge(ip='someip', icon='someurl', user='someuser')}
     # malformed = {'0017884e7dad': 'gibberish'} # results in AttributeError
-    known = {'0017884e7dad': Bridge('http://192.168.0.16:80/description.xml', None, None)}
-    print(find_bridges(known))
+    KNOWN = {'0017884e7dad': Bridge('http://192.168.0.16:80/', None, None)}
+    print(find_bridges(KNOWN))

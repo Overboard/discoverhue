@@ -267,6 +267,61 @@ class TestParsePortalJSON(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results, parsed_portal_response[3:4])
 
+    def test_build_from(self):
+        """ Arguably overboard on future proofing """
+        from discoverhue.discoverhue import _build_from
+        args = [
+            ('192.168.0.16', 'http://192.168.0.16/description.xml'),
+            ('192.168.0.16/', 'http://192.168.0.16/description.xml'),
+            ('//192.168.0.16', 'http://192.168.0.16/description.xml'),
+            ('//192.168.0.16/', 'http://192.168.0.16/description.xml'),
+            ('http://192.168.0.16', 'http://192.168.0.16/description.xml'),
+            ('http://192.168.0.16/', 'http://192.168.0.16/description.xml'),
+            ('HTTP://192.168.0.16', 'http://192.168.0.16/description.xml'),
+            ('https://192.168.0.16', 'https://192.168.0.16/description.xml'),
+
+            ('192.168.0.16:80', 'http://192.168.0.16:80/description.xml'),
+            ('192.168.0.16:80/', 'http://192.168.0.16:80/description.xml'),
+            ('http://192.168.0.16:80', 'http://192.168.0.16:80/description.xml'),
+            ('http://192.168.0.16:80/', 'http://192.168.0.16:80/description.xml'),
+
+            ('192.168.0.16/path', 'http://192.168.0.16/path/description.xml'),
+            ('192.168.0.16/path/', 'http://192.168.0.16/path/description.xml'),
+            ('http://192.168.0.16/path', 'http://192.168.0.16/path/description.xml'),
+            ('http://192.168.0.16/path/', 'http://192.168.0.16/path/description.xml'),
+
+            ('192.168.0.16:80/path', 'http://192.168.0.16:80/path/description.xml'),
+            ('192.168.0.16:80/path/', 'http://192.168.0.16:80/path/description.xml'),
+            ('http://192.168.0.16:80/path', 'http://192.168.0.16:80/path/description.xml'),
+            ('http://192.168.0.16:80/path/', 'http://192.168.0.16:80/path/description.xml'),
+
+            ('192.168.0.16/description.xml', 'http://192.168.0.16/description.xml'),
+            ('//192.168.0.16/description.xml', 'http://192.168.0.16/description.xml'),
+            ('http://192.168.0.16/description.xml', 'http://192.168.0.16/description.xml'),
+            ('https://192.168.0.16/description.xml', 'https://192.168.0.16/description.xml'),
+
+            ('192.168.0.16:80/description.xml', 'http://192.168.0.16:80/description.xml'),
+            ('//192.168.0.16:80/description.xml', 'http://192.168.0.16:80/description.xml'),
+            ('http://192.168.0.16:80/description.xml', 'http://192.168.0.16:80/description.xml'),
+            ('https://192.168.0.16:80/description.xml', 'https://192.168.0.16:80/description.xml'),
+
+            ('192.168.0.16/path/description.xml', 'http://192.168.0.16/path/description.xml'),
+            ('//192.168.0.16/path/description.xml', 'http://192.168.0.16/path/description.xml'),
+            ('http://192.168.0.16/path/description.xml', 'http://192.168.0.16/path/description.xml'),
+            ('https://192.168.0.16/path/description.xml', 'https://192.168.0.16/path/description.xml'),
+
+            ('192.168.0.16:80/path/description.xml', 'http://192.168.0.16:80/path/description.xml'),
+            ('//192.168.0.16:80/path/description.xml', 'http://192.168.0.16:80/path/description.xml'),
+            ('http://192.168.0.16:80/path/description.xml', 'http://192.168.0.16:80/path/description.xml'),
+            ('https://192.168.0.16:80/path/description.xml', 'https://192.168.0.16:80/path/description.xml'),
+        ]
+        logging.disable(logging.CRITICAL)
+        for arg, res in args:
+            xmlurl = _build_from(arg)
+            self.assertEqual(xmlurl, res, msg="arg was {}".format(arg))
+        logging.disable(logging.NOTSET)
+
+
 #-----------------------------------------------------------------------------
 # via_upnp
 #-----------------------------------------------------------------------------
@@ -405,16 +460,70 @@ class TestFindBridges(unittest.TestCase):
         self.assertIsInstance(found_bridges, dict)
         self.assertEqual(len(found_bridges), 2)
         print(found_bridges)
-        # presently returning an empty dict
 
     def test_find_bridges_06(self, json_mock, poll_mock, xml_mock):
-        """ with empty non-hashable input expect same as None """
-        known_bridges = {'0017884e7dad': Bridge('http://192.168.0.23:80/description.xml', None, None)}
+        """ with good bridge expect no discovery """
+        known_bridges = {'0017884e7dad': Bridge('http://192.168.0.23:80/', None, None)}
         found_bridges = find_bridges(known_bridges)
-        # self.assertIsInstance(found_bridges, dict)
-        # self.assertEqual(len(found_bridges), 2)
-        print(found_bridges)
+        # confirm mock calls
+        self.assertEqual(json_mock.call_count, 0)
+        self.assertEqual(poll_mock.call_count, 0)
+        self.assertEqual(xml_mock.call_count, 1)
+        # confirm results
+        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(len(found_bridges), 1)
+        self.assertEqual(len(known_bridges), 0)
 
+    def test_find_bridges_07(self, json_mock, poll_mock, xml_mock):
+        """ with two good bridges expect no discovery """
+        known_bridges = {
+            '0017884e7dad': Bridge('http://192.168.0.23:80/', None, None),
+            '001788102201': Bridge('http://192.168.1.130:80/', None, None),
+        }
+        found_bridges = find_bridges(known_bridges)
+        # confirm mock calls
+        self.assertEqual(json_mock.call_count, 0)
+        self.assertEqual(poll_mock.call_count, 0)
+        self.assertEqual(xml_mock.call_count, 2)
+        # confirm results
+        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(len(found_bridges), 2)
+        self.assertEqual(len(known_bridges), 0)
+
+    def test_find_bridges_08(self, json_mock, poll_mock, xml_mock):
+        """ with two good bridges expect no discovery """
+        known_bridges = {
+            '0017884e7dad': Bridge('http://192.168.0.23:80/', None, None),
+            '001788102201': Bridge('http://192.168.1.130:80/', None, None),
+        }
+        found_bridges = find_bridges(known_bridges)
+        # confirm mock calls
+        self.assertEqual(json_mock.call_count, 0)
+        self.assertEqual(poll_mock.call_count, 0)
+        self.assertEqual(xml_mock.call_count, 2)
+        # confirm results
+        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(len(found_bridges), 2)
+        self.assertEqual(len(known_bridges), 0)
+        print(known_bridges, found_bridges)
+
+    def test_find_bridges_09(self, json_mock, poll_mock, xml_mock):
+        """ with two good, one bad bridges expect discovery """
+        known_bridges = {
+            '0017884e7dad': Bridge('http://192.168.0.23:80/', None, None),
+            '001788102201': Bridge('http://192.168.1.130:80/', None, None),
+            '00deadbeef00': Bridge('http://192.168.2.20/', None, None)
+        }
+        found_bridges = find_bridges(known_bridges)
+        # confirm mock calls
+        # self.assertEqual(json_mock.call_count, 1)
+        self.assertEqual(poll_mock.call_count, 1)
+        self.assertEqual(xml_mock.call_count, 3)
+        # confirm results
+        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(len(found_bridges), 2)
+        self.assertEqual(len(known_bridges), 1)
+        print(known_bridges, found_bridges)
 
 # doctest integration
 # def load_tests(loader, tests, ignore):
