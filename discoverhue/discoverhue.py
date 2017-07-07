@@ -46,6 +46,10 @@ from collections import namedtuple
 if __name__ is not '__main__':
     from discoverhue.ssdp import discover as ssdp_discover
 
+class DiscoveryError(Exception):
+    """ Raised when a discovery method yields no results """
+    pass
+
 Bridge = namedtuple('Bridge', ['ip', 'icon', 'user'])
 """ Bridge named tuple for storing info
 
@@ -171,7 +175,10 @@ def via_upnp():
             found_bridges[serial] = bridge_info
 
     logging.debug('%s', found_bridges)
-    return found_bridges
+    if found_bridges:
+        return found_bridges
+    else:
+        raise DiscoveryError('SSDP returned nothing')
 
 def via_nupnp():
     """ Use method 2 as described by the Philips guide """
@@ -187,7 +194,14 @@ def via_nupnp():
             found_bridges[serial] = bridge_info
 
     logging.debug('%s', found_bridges)
-    return found_bridges
+    if found_bridges:
+        return found_bridges
+    else:
+        raise DiscoveryError('Portal returned nothing')
+
+def via_scan():
+    """ IP scan - not implemented """
+    raise DiscoveryError()
 
 def valid_whitelist(bridge_tuple):
     return True
@@ -202,12 +216,12 @@ def find_bridges(prior_bridges=None, create_new_as=None):
     TODO: add mode to call with IP and return serial?
     TODO: support a list of SN's as input, or something simpler than dict of bridge()
     """
+    known_bridges = {}
+    found_bridges = {}
 
     # with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
     #     futures = {prior_sn: executor.submit(parse_description_xml, prior_bridge.ip)
     #         for prior_sn, prior_bridge in prior_bridges.items()}
-
-    found_bridges = {}
 
     # Validate caller's provided list
     try:
@@ -222,8 +236,8 @@ def find_bridges(prior_bridges=None, create_new_as=None):
                 continue
             serial, bridge = parse_description_xml(_build_from(prior_bridge.ip))
             if serial == prior_sn:
-                # add to found with provided user
-                found_bridges[serial] = bridge._replace(user=prior_bridge.user)
+                # add to known with provided user
+                known_bridges[serial] = bridge._replace(user=prior_bridge.user)
                 del prior_bridges[serial]
             elif serial:
                 # stumbled on another bridge, add to found
@@ -235,11 +249,17 @@ def find_bridges(prior_bridges=None, create_new_as=None):
     # prior_bridges is None, single SN, dict of unfound SNs, or empty dict
     if prior_bridges or prior_bridges is None:
         # do the discovery, was not an empty dict
-        found_bridges.update(via_upnp())
-        if not found_bridges:
-            found_bridges.update(via_nupnp())
-            # if not found_bridges:
-            #     found_bridges.update(via_scan)
+        try:
+            found_bridges.update(via_upnp())
+        except DiscoveryError:
+            try:
+                found_bridges.update(via_nupnp())
+            except DiscoveryError:
+                try:
+                    found_bridges.update(via_scan)
+                except DiscoveryError:
+                    logging.warning("All discovery methods returned nothing")
+
         if prior_bridges:
             # prior_bridges is either single SN or dict of unfound SNs
             # first assume single Serial SN string
@@ -258,7 +278,7 @@ def find_bridges(prior_bridges=None, create_new_as=None):
                 # so there's no need to validate/create
                 return ip_address
             # assume user passed a dict of Serial IDs with whitelist info
-            for serial in found_bridges:
+            for serial in list(found_bridges.keys()):
                 try:
                     # update found bridge with whitelisted user from caller
                     prior_user = prior_bridges[serial].user
@@ -272,6 +292,7 @@ def find_bridges(prior_bridges=None, create_new_as=None):
                     continue
                 else:
                     del prior_bridges[serial]
+                    del found_bridges[serial]
         else:
             # prior_bridges is None, move on to whitelist checks
             pass
@@ -281,12 +302,13 @@ def find_bridges(prior_bridges=None, create_new_as=None):
 
     # prior_bridges is None, dict of unfound SNs, or empty dict
     # found_bridges is dict of found SNs or empty
+    # known_bridges is dict of found SNs with user
 
     # """TODO: Any value in checking the whitelist validity even if not creating?""""
     if create_new_as:
-        for serial in found_bridges:
-            if valid_whitelist(found_bridges[serial]):
-                create_new_whitelist(found_bridges[serial], create_new_as)
+        for serial in known_bridges:
+            if valid_whitelist(known_bridges[serial]):
+                create_new_whitelist(known_bridges[serial], create_new_as)
 
     # is anything left in prior_bridges?
     if prior_bridges is not None:
@@ -294,6 +316,7 @@ def find_bridges(prior_bridges=None, create_new_as=None):
             logging.warning('Could not locate bridge with Serial ID %s', serial)
             # """TODO: decide how to handle unresolved bridges""""
 
+    found_bridges.update(known_bridges)
     return found_bridges
 
 

@@ -49,6 +49,7 @@ The portal will return:
 
     where only the last is reachable
 
+TODO: rename tests
 """
 class Desalinator(pickle.Unpickler):
     """ Restricted class unpickler """
@@ -353,11 +354,12 @@ class TestUPNPdiscovery(unittest.TestCase):
         self.assertEqual(found_bridges['0017884e7dad'].ip, 'http://192.168.0.23:80/')
 
     @patch('discoverhue.discoverhue.ssdp_discover', return_value=get_ssdp_scenario('SSDP_0in3.pickle'))
-    def test_0in3(self, poll_mock, xml_mock):
+    def test_0in3_upnp(self, poll_mock, xml_mock):
         """ SSDP returns three devices, no bridge """
-        found_bridges = via_upnp()
+        with self.assertRaises(DiscoveryError):
+            found_bridges = via_upnp()
         self.assertEqual(poll_mock.call_count, 1)
-        self.assertEqual(len(found_bridges), 0)
+        # self.assertEqual(len(found_bridges), 0)
         xml_mock.assert_not_called()
 
 
@@ -401,12 +403,13 @@ class TestNUPNPdiscovery(unittest.TestCase):
         self.assertEqual(found_bridges['0017884e7dad'].ip, 'http://192.168.0.23:80/')
 
     @patch('discoverhue.discoverhue.parse_portal_json', return_value=parsed_portal_response[0:3])
-    def test_0in3(self, json_mock, xml_mock):
+    def test_0in3_nupnp(self, json_mock, xml_mock):
         """ Portal returns three devices, no bridge """
-        found_bridges = via_nupnp()
+        with self.assertRaises(DiscoveryError):
+            found_bridges = via_nupnp()
         self.assertEqual(xml_mock.call_count, 3)
         self.assertEqual(json_mock.call_count, 1)
-        self.assertEqual(len(found_bridges), 0)
+        # self.assertEqual(len(found_bridges), 0)
 
 
 #-----------------------------------------------------------------------------
@@ -516,9 +519,9 @@ class TestFindBridges(unittest.TestCase):
         }
         found_bridges = find_bridges(known_bridges)
         # confirm mock calls
-        # self.assertEqual(json_mock.call_count, 1)
+        self.assertEqual(json_mock.call_count, 1)
         self.assertEqual(poll_mock.call_count, 1)
-        self.assertEqual(xml_mock.call_count, 3)
+        self.assertEqual(xml_mock.call_count, 8)
         # confirm results
         self.assertIsInstance(found_bridges, dict)
         self.assertEqual(len(found_bridges), 2)
