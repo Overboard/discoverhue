@@ -17,8 +17,8 @@ print("\nSearching for {s}...".format(s=search_id))
 found = discoverhue.find_bridges(search_id)
 print(found)
 
-search_id = {'0017884e7dad':discoverhue.Bridge(None, None, None),
-             'deadbeef':discoverhue.Bridge(None, None, None)}
+search_id = {'0017884e7dad':discoverhue.Bridge('192.168.0.1'),
+             'deadbeef':discoverhue.Bridge('192.168.0.2')}
 print("\nSearching for {s}...".format(s=search_id))
 found = discoverhue.find_bridges(search_id)
 print("Found {}".format(len(found)))

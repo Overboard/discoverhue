@@ -12,13 +12,15 @@ http://192.168.0.???:80/description.xml
 TODO: update text
 Outline:
 Enter discovery with bridge dict and create bool + user name
-    if running upnp finds nothing,
-        if runninf n-upnp finds nothing
-            done?
-        else
-            update bridge dict
-    else
-        update bridge dict
+    Check for bridges at provided IP's
+    Run discovery if not all ID's have a valid IP
+    Discovery:
+        if running upnp finds nothing,
+            if running n-upnp finds nothing,
+                if running ip scan finds nothing,
+                    return nothing
+            else update bridge dict
+        else update bridge dict
 
     for items
         if validate fails
@@ -51,6 +53,7 @@ class DiscoveryError(Exception):
     pass
 
 Bridge = namedtuple('Bridge', ['ip', 'icon', 'user'])
+Bridge.__new__.__defaults__ = (None, ) * len(Bridge._fields)
 """ Bridge named tuple for storing info
 
     ip    - base address string as found in URLBase of description file
@@ -256,7 +259,7 @@ def find_bridges(prior_bridges=None, create_new_as=None):
                 found_bridges.update(via_nupnp())
             except DiscoveryError:
                 try:
-                    found_bridges.update(via_scan)
+                    found_bridges.update(via_scan())
                 except DiscoveryError:
                     logging.warning("All discovery methods returned nothing")
 
@@ -283,7 +286,7 @@ def find_bridges(prior_bridges=None, create_new_as=None):
                     # update found bridge with whitelisted user from caller
                     prior_user = prior_bridges[serial].user
                     combined = found_bridges[serial]._replace(user=prior_user)
-                    found_bridges[serial] = combined
+                    known_bridges[serial] = combined
                 except TypeError:
                     # presumably still dealing with user input that wasn't a dict
                     break
