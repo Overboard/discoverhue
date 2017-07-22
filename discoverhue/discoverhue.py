@@ -202,7 +202,6 @@ def find_bridges(prior_bridges=None):
     TODO: add mode to call with IP and return serial?
     TODO: support a list of SN's as input, or something simpler than dict of bridge()
     """
-    known_bridges = {}
     found_bridges = {}
 
     # with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
@@ -222,8 +221,8 @@ def find_bridges(prior_bridges=None):
                 continue
             serial, baseip = parse_description_xml(_build_from(prior_ip))
             if serial == prior_sn:
-                # add to known with provided user
-                known_bridges[serial] = baseip
+                # add to found and remove from prior
+                found_bridges[serial] = baseip
                 del prior_bridges[serial]
             elif serial:
                 # stumbled on another bridge, add to found
@@ -263,11 +262,10 @@ def find_bridges(prior_bridges=None):
                 # user provided Serial Number found
                 return ip_address
             # assume user passed a dict of Serial IDs
-            for serial, baseip in list(found_bridges.items()):
+            for serial in found_bridges:
                 try:
-                    known_bridges[serial] = baseip
+                    # attempt to remove from prior
                     del prior_bridges[serial]
-                    del found_bridges[serial]
                 except TypeError:
                     # presumably still dealing with user input that wasn't a dict
                     break
@@ -275,7 +273,7 @@ def find_bridges(prior_bridges=None):
                     # requested serial number wasn't found in discovery
                     continue
         else:
-            # prior_bridges is None, move on to whitelist checks
+            # prior_bridges is None
             pass
     else:
         # skip discovery, prior_bridges dict was emptied already
@@ -283,7 +281,6 @@ def find_bridges(prior_bridges=None):
 
     # prior_bridges is None, dict of unfound SNs, or empty dict
     # found_bridges is dict of found SNs or empty
-    # known_bridges is dict of found SNs with user
 
     # is anything left in prior_bridges?
     if prior_bridges is not None:
@@ -291,7 +288,6 @@ def find_bridges(prior_bridges=None):
             logging.warning('Could not locate bridge with Serial ID %s', serial)
             # """TODO: decide how to handle unresolved bridges""""
 
-    found_bridges.update(known_bridges)
     return found_bridges
 
 if __name__ == '__main__':
