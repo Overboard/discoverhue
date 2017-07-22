@@ -43,7 +43,6 @@ import urllib.request
 from urllib.parse import urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
 import json
-from collections import namedtuple
 
 if __name__ is not '__main__':
     from discoverhue.ssdp import discover as ssdp_discover
@@ -51,17 +50,6 @@ if __name__ is not '__main__':
 class DiscoveryError(Exception):
     """ Raised when a discovery method yields no results """
     pass
-
-Bridge = namedtuple('Bridge', ['ip', 'icon', 'user'])
-Bridge.__new__.__defaults__ = (None, ) * len(Bridge._fields)
-""" Bridge named tuple for storing info
-
-    ip    - base address string as found in URLBase of description file
-            assuming form scheme://netloc
-    icon  - first found icon file
-    user  - whitelist ID as provided by user
-"""
-    # """TODO: default values on instantiation - change to class?"""
 
 def from_url(location):
     """ HTTP request for page at location returned as string
@@ -102,11 +90,12 @@ def parse_description_xml(location):
         baseip = root.find('root:URLBase', rootname).text
         device = root.find('root:device', rootname)
         serial = device.find('root:serialNumber', rootname).text
-        anicon = device.find('root:iconList', rootname).find('root:icon', rootname)
-        imgurl = anicon.find('root:url', rootname).text
+        # anicon = device.find('root:iconList', rootname).find('root:icon', rootname)
+        # imgurl = anicon.find('root:url', rootname).text
+
         # Alternatively, could look directly in the modelDescription field
         if all(x in xml_str.lower() for x in ['philips', 'hue']):
-            return serial, Bridge(ip=baseip, icon=imgurl, user=None)
+            return serial, baseip
         else:
             return None, None
 
@@ -206,13 +195,7 @@ def via_scan():
     """ IP scan - not implemented """
     raise DiscoveryError()
 
-def valid_whitelist(bridge_tuple):
-    return True
-
-def create_new_whitelist(bridge_tuple, appname):
-    pass
-
-def find_bridges(prior_bridges=None, create_new_as=None):
+def find_bridges(prior_bridges=None):
     """ Locate Philips Hue bridges
 
     TODO: more verbosity here
@@ -223,8 +206,8 @@ def find_bridges(prior_bridges=None, create_new_as=None):
     found_bridges = {}
 
     # with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-    #     futures = {prior_sn: executor.submit(parse_description_xml, prior_bridge.ip)
-    #         for prior_sn, prior_bridge in prior_bridges.items()}
+    #     futures = {prior_sn: executor.submit(parse_description_xml, prior_ip)
+    #         for prior_sn, prior_ip in prior_bridges.items()}
 
     # Validate caller's provided list
     try:
@@ -234,20 +217,20 @@ def find_bridges(prior_bridges=None, create_new_as=None):
         # in either case, the discovery must be executed
         pass
     else:
-        for prior_sn, prior_bridge in prior_bridges_list:
+        for prior_sn, prior_ip in prior_bridges_list:
             if prior_sn is None:
                 continue
-            serial, bridge = parse_description_xml(_build_from(prior_bridge.ip))
+            serial, baseip = parse_description_xml(_build_from(prior_ip))
             if serial == prior_sn:
                 # add to known with provided user
-                known_bridges[serial] = bridge._replace(user=prior_bridge.user)
+                known_bridges[serial] = baseip
                 del prior_bridges[serial]
             elif serial:
                 # stumbled on another bridge, add to found
-                found_bridges[serial] = bridge
+                found_bridges[serial] = baseip
             else:
                 # nothing usable at that ip
-                logging.info('%s not found at %s', prior_sn, prior_bridge.ip)
+                logging.info('%s not found at %s', prior_sn, prior_ip)
 
     # prior_bridges is None, single SN, dict of unfound SNs, or empty dict
     if prior_bridges or prior_bridges is None:
@@ -267,7 +250,7 @@ def find_bridges(prior_bridges=None, create_new_as=None):
             # prior_bridges is either single SN or dict of unfound SNs
             # first assume single Serial SN string
             try:
-                ip_address = found_bridges[prior_bridges].ip
+                ip_address = found_bridges[prior_bridges]
             except TypeError:
                 # user passed an invalid type for key
                 # presumably it's a dict meant for alternate mode
@@ -277,25 +260,20 @@ def find_bridges(prior_bridges=None, create_new_as=None):
                 # user provided Serial Number was not found
                 return None
             else:
-                # note there's no whitelist name provided in this mode
-                # so there's no need to validate/create
+                # user provided Serial Number found
                 return ip_address
-            # assume user passed a dict of Serial IDs with whitelist info
-            for serial in list(found_bridges.keys()):
+            # assume user passed a dict of Serial IDs
+            for serial, baseip in list(found_bridges.items()):
                 try:
-                    # update found bridge with whitelisted user from caller
-                    prior_user = prior_bridges[serial].user
-                    combined = found_bridges[serial]._replace(user=prior_user)
-                    known_bridges[serial] = combined
+                    known_bridges[serial] = baseip
+                    del prior_bridges[serial]
+                    del found_bridges[serial]
                 except TypeError:
                     # presumably still dealing with user input that wasn't a dict
                     break
                 except KeyError:
                     # requested serial number wasn't found in discovery
                     continue
-                else:
-                    del prior_bridges[serial]
-                    del found_bridges[serial]
         else:
             # prior_bridges is None, move on to whitelist checks
             pass
@@ -307,12 +285,6 @@ def find_bridges(prior_bridges=None, create_new_as=None):
     # found_bridges is dict of found SNs or empty
     # known_bridges is dict of found SNs with user
 
-    # """TODO: Any value in checking the whitelist validity even if not creating?""""
-    if create_new_as:
-        for serial in known_bridges:
-            if valid_whitelist(known_bridges[serial]):
-                create_new_whitelist(known_bridges[serial], create_new_as)
-
     # is anything left in prior_bridges?
     if prior_bridges is not None:
         for serial in prior_bridges:
@@ -322,11 +294,6 @@ def find_bridges(prior_bridges=None, create_new_as=None):
     found_bridges.update(known_bridges)
     return found_bridges
 
-
-def check_bridges():
-    """ Check IP and white list access, no scan """
-    pass
-
 if __name__ == '__main__':
     from ssdp import discover as ssdp_discover
     logging.basicConfig(level=logging.DEBUG,                                                 \
@@ -334,5 +301,5 @@ if __name__ == '__main__':
         datefmt="%Y-%m-%d %H:%M:%S")
     # known = {'0017884e7dad': Bridge(ip='someip', icon='someurl', user='someuser')}
     # malformed = {'0017884e7dad': 'gibberish'} # results in AttributeError
-    KNOWN = {'0017884e7dad': Bridge('http://192.168.0.16:80/', None, None)}
+    KNOWN = {'0017884e7dad': 'http://192.168.0.16:80/'}
     print(find_bridges(KNOWN))

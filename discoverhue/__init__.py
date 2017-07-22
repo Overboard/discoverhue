@@ -1,1 +1,2 @@
-from .discoverhue import find_bridges, Bridge
+""" Module imports """
+from .discoverhue import find_bridges

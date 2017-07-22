@@ -1,0 +1,11 @@
+from collections import namedtuple
+
+Bridge = namedtuple('Bridge', ['ip', 'icon', 'user'])
+Bridge.__new__.__defaults__ = (None, ) * len(Bridge._fields)
+""" Bridge named tuple for storing info
+
+    ip    - base address string as found in URLBase of description file
+            assuming form scheme://netloc
+    icon  - first found icon file
+    user  - whitelist ID as provided by user
+"""
