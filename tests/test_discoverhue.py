@@ -434,9 +434,12 @@ class TestFindBridges(unittest.TestCase):
         self.assertEqual(poll_mock.call_count, 1)
         self.assertEqual(xml_mock.call_count, 5)
         # confirm results
+        self.assertIsInstance(found_bridges, dict)
         self.assertEqual(len(found_bridges), 2)
         self.assertIn('0017884e7dad', found_bridges)
         self.assertEqual(found_bridges['0017884e7dad'], 'http://192.168.0.23:80/')
+        self.assertIn('001788102201', found_bridges)
+        self.assertEqual(found_bridges['001788102201'], 'http://192.168.1.130:80/')
 
     def test_find_bridges_02(self, json_mock, poll_mock, xml_mock):
         """ with good serial number expect return of string with ip """
@@ -446,21 +449,56 @@ class TestFindBridges(unittest.TestCase):
         self.assertEqual(found_bridges, 'http://192.168.1.130:80/')
 
     def test_find_bridges_03(self, json_mock, poll_mock, xml_mock):
-        """ with missing serial expect return of none """
+        """ with missing serial expect return of {} """
         found_bridges = find_bridges('deadbeef')
-        self.assertEqual(found_bridges, None)
+        self.assertEqual(found_bridges, {})
+        # TODO: sure?
 
     def test_find_bridges_04(self, json_mock, poll_mock, xml_mock):
-        """ with non-hashable input expect same as None """
-        found_bridges = find_bridges(['deadbeef', '0017884e7dad'])
+        """ with non-hashable, mutable input expect filtered return """
+        known_bridges = ['deadbeef', '0017884e7dad']
+        found_bridges = find_bridges(known_bridges)
         self.assertIsInstance(found_bridges, dict)
-        self.assertEqual(len(found_bridges), 2)
+        self.assertEqual(len(found_bridges), 1)
+        self.assertIn('0017884e7dad', found_bridges)
+        self.assertEqual(len(known_bridges), 1)
+        self.assertIn('deadbeef', known_bridges)
+
+    def test_find_bridges_04a(self, json_mock, poll_mock, xml_mock):
+        """ with non-hashable, mutable input expect filtered return """
+        known_bridges = {'deadbeef', '0017884e7dad'}
+        found_bridges = find_bridges(known_bridges)
+        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(len(found_bridges), 1)
+        self.assertIn('0017884e7dad', found_bridges)
+        self.assertEqual(len(known_bridges), 1)
+        self.assertIn('deadbeef', known_bridges)
+
+    def test_find_bridges_04b(self, json_mock, poll_mock, xml_mock):
+        """ with non-hashable, mutable input expect filtered return """
+        known_bridges = ('deadbeef', '0017884e7dad')
+        found_bridges = find_bridges(known_bridges)
+        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(len(found_bridges), 1)
+        self.assertIn('0017884e7dad', found_bridges)
+        self.assertEqual(len(known_bridges), 2)
+        self.assertIn('deadbeef', known_bridges)
+        self.assertIn('0017884e7dad', known_bridges)
 
     @unittest.expectedFailure
     def test_find_bridges_05(self, json_mock, poll_mock, xml_mock):
-        """ with empty non-hashable input expect same as None """
+        """ with empty dict expect empty dict """
         found_bridges = find_bridges({})
-        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(found_bridges, {})
+        # TODO: sure?  would None be better?
+
+    def test_find_bridges_05a(self, json_mock, poll_mock, xml_mock):
+        """ with empty non-hashable input expect same as None """
+        found_bridges = find_bridges(())
+        self.assertEqual(len(found_bridges), 2)
+        found_bridges = find_bridges([])
+        self.assertEqual(len(found_bridges), 2)
+        found_bridges = find_bridges(set())
         self.assertEqual(len(found_bridges), 2)
         print(found_bridges)
 
@@ -494,24 +532,6 @@ class TestFindBridges(unittest.TestCase):
         self.assertEqual(len(known_bridges), 0)
 
     def test_find_bridges_08(self, json_mock, poll_mock, xml_mock):
-        """ with two good bridges expect no discovery """
-        known_bridges = {
-            '0017884e7dad': 'http://192.168.0.23:80/', 
-            '001788102201': 'http://192.168.1.130:80/',
-            
-        }
-        found_bridges = find_bridges(known_bridges)
-        # confirm mock calls
-        self.assertEqual(json_mock.call_count, 0)
-        self.assertEqual(poll_mock.call_count, 0)
-        self.assertEqual(xml_mock.call_count, 2)
-        # confirm results
-        self.assertIsInstance(found_bridges, dict)
-        self.assertEqual(len(found_bridges), 2)
-        self.assertEqual(len(known_bridges), 0)
-        print(known_bridges, found_bridges)
-
-    def test_find_bridges_09(self, json_mock, poll_mock, xml_mock):
         """ with two good, one bad bridges expect discovery """
         known_bridges = {
             '0017884e7dad': 'http://192.168.0.23:80/',
@@ -528,6 +548,19 @@ class TestFindBridges(unittest.TestCase):
         self.assertEqual(len(found_bridges), 2)
         self.assertEqual(len(known_bridges), 1)
         print(known_bridges, found_bridges)
+
+    def test_find_bridges_09(self, json_mock, poll_mock, xml_mock):
+        """ with bad bridge expect discovery """
+        known_bridges = {'0017884e7dad': None}
+        found_bridges = find_bridges(known_bridges)
+        # confirm mock calls
+        self.assertEqual(json_mock.call_count, 1)
+        self.assertEqual(poll_mock.call_count, 1)
+        self.assertEqual(xml_mock.call_count, 5)
+        # confirm results
+        self.assertIsInstance(found_bridges, dict)
+        self.assertEqual(len(found_bridges), 1)
+        self.assertEqual(len(known_bridges), 0)
 
 # doctest integration
 # def load_tests(loader, tests, ignore):

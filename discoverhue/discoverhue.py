@@ -210,30 +210,27 @@ def find_bridges(prior_bridges=None):
 
     # Validate caller's provided list
     try:
-        prior_bridges_list = list(prior_bridges.items())
+        prior_bridges_list = prior_bridges.items()
     except AttributeError:
         # if caller didnt provide dict then assume single SN or None
         # in either case, the discovery must be executed
-        pass
+        run_discovery = True
     else:
         for prior_sn, prior_ip in prior_bridges_list:
-            if prior_sn is None:
-                continue
-            serial, baseip = parse_description_xml(_build_from(prior_ip))
-            if serial == prior_sn:
-                # add to found and remove from prior
-                found_bridges[serial] = baseip
-                del prior_bridges[serial]
-            elif serial:
-                # stumbled on another bridge, add to found
-                found_bridges[serial] = baseip
-            else:
-                # nothing usable at that ip
-                logging.info('%s not found at %s', prior_sn, prior_ip)
+            if prior_ip:
+                serial, baseip = parse_description_xml(_build_from(prior_ip))
+                if serial:
+                    # there is a bridge at provided IP, add to found
+                    found_bridges[serial] = baseip
+                else:
+                    # nothing usable at that ip
+                    logging.info('%s not found at %s', prior_sn, prior_ip)
+        run_discovery = found_bridges.keys() != prior_bridges.keys()
 
-    # prior_bridges is None, single SN, dict of unfound SNs, or empty dict
-    if prior_bridges or prior_bridges is None:
-        # do the discovery, was not an empty dict
+    # prior_bridges is None, unknown, dict of unfound SNs, or empty dict
+    # found_bridges is dict of found SNs from prior, or empty dict
+    if run_discovery:
+        # do the discovery, not all IPs were confirmed
         try:
             found_bridges.update(via_upnp())
         except DiscoveryError:
@@ -245,48 +242,52 @@ def find_bridges(prior_bridges=None):
                 except DiscoveryError:
                     logging.warning("All discovery methods returned nothing")
 
-        if prior_bridges:
-            # prior_bridges is either single SN or dict of unfound SNs
-            # first assume single Serial SN string
-            try:
-                ip_address = found_bridges[prior_bridges]
-            except TypeError:
-                # user passed an invalid type for key
-                # presumably it's a dict meant for alternate mode
-                logging.debug('Assuming alternate mode, prior_bridges is type %s.',
-                              type(prior_bridges))
-            except KeyError:
-                # user provided Serial Number was not found
-                return None
-            else:
-                # user provided Serial Number found
-                return ip_address
-            # assume user passed a dict of Serial IDs
-            for serial in found_bridges:
-                try:
-                    # attempt to remove from prior
-                    del prior_bridges[serial]
-                except TypeError:
-                    # presumably still dealing with user input that wasn't a dict
-                    break
-                except KeyError:
-                    # requested serial number wasn't found in discovery
-                    continue
+    if prior_bridges:
+        # prior_bridges is either single SN or dict of unfound SNs
+        # first assume single Serial SN string
+        try:
+            ip_address = found_bridges[prior_bridges]
+        except TypeError:
+            # user passed an invalid type for key
+            # presumably it's a dict meant for alternate mode
+            logging.debug('Assuming alternate mode, prior_bridges is type %s.',
+                          type(prior_bridges))
+        except KeyError:
+            # user provided Serial Number was not found
+            # TODO: dropping tuples here
+            # return None
+            pass # let it turn the string into a set, eww
         else:
-            # prior_bridges is None
-            pass
-    else:
-        # skip discovery, prior_bridges dict was emptied already
-        pass
+            # user provided Serial Number found
+            return ip_address
 
-    # prior_bridges is None, dict of unfound SNs, or empty dict
-    # found_bridges is dict of found SNs or empty
+        # Filter the found list to subset of prior
+        prior_bridges_keys = set(prior_bridges)
+        keys_to_remove = prior_bridges_keys ^ found_bridges.keys()
+        logging.debug('Removing %s from found_bridges', keys_to_remove)
+        for key in keys_to_remove:
+            found_bridges.pop(key, None)
 
-    # is anything left in prior_bridges?
-    if prior_bridges is not None:
-        for serial in prior_bridges:
+        # Filter the prior dict to unfound only
+        keys_to_remove = prior_bridges_keys & found_bridges.keys()
+        logging.debug('Removing %s from prior_bridges', keys_to_remove)
+        for key in keys_to_remove:
+            try:
+                prior_bridges.pop(key, None)
+            except TypeError:
+                # not a dict, try as set or list
+                prior_bridges.remove(key)
+            except AttributeError:
+                # likely not mutable
+                break
+
+        keys_to_report = prior_bridges_keys - found_bridges.keys()
+        for serial in keys_to_report:
             logging.warning('Could not locate bridge with Serial ID %s', serial)
-            # """TODO: decide how to handle unresolved bridges""""
+
+    else:
+        # prior_bridges is None or empty dict, return all found
+        pass
 
     return found_bridges
 
@@ -295,7 +296,18 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG,                                                 \
         format='%(asctime)s.%(msecs)03d %(levelname)s:%(module)s:%(funcName)s: %(message)s', \
         datefmt="%Y-%m-%d %H:%M:%S")
-    # known = {'0017884e7dad': Bridge(ip='someip', icon='someurl', user='someuser')}
-    # malformed = {'0017884e7dad': 'gibberish'} # results in AttributeError
-    KNOWN = {'0017884e7dad': 'http://192.168.0.16:80/'}
+
+    # KNOWN = '0017884e7dad'
+    # KNOWN = '0017884e7dad', 'deadbeef'
+    # KNOWN = ('0017884e7dad', 'deadbeef')
+    # KNOWN = ['0017884e7dad', 'deadbeef']
+    # KNOWN = {'0017884e7dad', 'deadbeef'}
+    # KNOWN = {'0017884e7dad': None}
+    # KNOWN = {'0017884e7dad': 'http://192.168.0.16:80/'}
+    # KNOWN = {'0017884e7dad': 'http://192.168.0.27:80/',
+    #          'deadbeef7dad': 'http://192.168.0.10:80/'}
+    KNOWN = {'0017884e7dad': 'http://192.168.0.16:80/',
+             'deadbeef7dad': 'http://192.168.0.10:80/'}
+    # KNOWN = None
+
     print(find_bridges(KNOWN))
