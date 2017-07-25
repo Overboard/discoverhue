@@ -11,7 +11,7 @@ http://192.168.0.???:80/description.xml
 
 TODO: update text
 Outline:
-Enter discovery with bridge dict and create bool + user name
+Enter with bridge dict and create as user name
     Check for bridges at provided IP's
     Run discovery if not all ID's have a valid IP
     Discovery:
@@ -28,14 +28,9 @@ Enter discovery with bridge dict and create bool + user name
 
     return updated bridge dict (figuratively)
 
-Enter discovery with ID
-    if running upnp finds nothing,
-        if running n-upnp finds nothing,
-            bail
-    if ID provided
-        return addr of matching ID
-    else
-        return any addr
+Enter with ID
+    Run discovery
+    return addr of matching ID
 
 """
 import logging
@@ -101,7 +96,6 @@ def parse_description_xml(location):
 
 def _build_from(baseip):
     """ Build URL for description.xml from ip """
-    # """TODO: don't really need the try/except"""
     from ipaddress import ip_address
     try:
         ip_address(baseip)
@@ -199,7 +193,6 @@ def find_bridges(prior_bridges=None):
     """ Locate Philips Hue bridges
 
     TODO: more verbosity here
-    TODO: add mode to call with IP and return serial?
     TODO: support a list of SN's as input, or something simpler than dict of bridge()
     """
     found_bridges = {}
