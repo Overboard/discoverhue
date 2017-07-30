@@ -9,11 +9,11 @@ https://developers.meethue.com/documentation/hue-bridge-discovery
 SSDP response will have a location such as
 http://192.168.0.???:80/description.xml
 
-TODO: update text
+
 Outline:
-Enter with bridge dict and create as user name
+Enter with optional Serial Numbers and IP's
     Check for bridges at provided IP's
-    Run discovery if not all ID's have a valid IP
+    If not all Serial Numbers have a valid IP, run discovery
     Discovery:
         if running upnp finds nothing,
             if running n-upnp finds nothing,
@@ -21,17 +21,12 @@ Enter with bridge dict and create as user name
                     return nothing
             else update bridge dict
         else update bridge dict
-
-    for items
-        if validate fails
-            create new user
-
-    return updated bridge dict (figuratively)
-
-Enter with ID
-    Run discovery
-    return addr of matching ID
-
+    If a single serial number was provided
+        return the matching address as a string
+    otherwise,
+        return a dictionary of serial:address pairs
+    If the argument was mutable
+        remove matched serial numbers from it
 """
 import logging
 import urllib.request
@@ -187,19 +182,20 @@ def via_nupnp():
 
 def via_scan():
     """ IP scan - not implemented """
+    logging.warning("IP scan not implemented")
     raise DiscoveryError()
 
 def find_bridges(prior_bridges=None):
-    """ Locate Philips Hue bridges
+    """ Confirm or locate IP addresses of Philips Hue bridges.
 
-    TODO: more verbosity here
-    TODO: support a list of SN's as input, or something simpler than dict of bridge()
+    `prior_bridges` -- optional list of bridge serial numbers
+    * omitted - all discovered bridges returned as dictionary
+    * single string - returns IP as string or None
+    * dictionary - validate provided ip's before attempting discovery
+    * collection or sequence - return dictionary of filtered sn:ip pairs
+      * if mutable then found bridges are removed from argument
     """
     found_bridges = {}
-
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-    #     futures = {prior_sn: executor.submit(parse_description_xml, prior_ip)
-    #         for prior_sn, prior_ip in prior_bridges.items()}
 
     # Validate caller's provided list
     try:
@@ -247,7 +243,7 @@ def find_bridges(prior_bridges=None):
                           type(prior_bridges))
         except KeyError:
             # user provided Serial Number was not found
-            # TODO: dropping tuples here
+            # TODO: dropping tuples here if return none executed
             # return None
             pass # let it turn the string into a set, eww
         else:
@@ -299,8 +295,8 @@ if __name__ == '__main__':
     # KNOWN = {'0017884e7dad': 'http://192.168.0.16:80/'}
     # KNOWN = {'0017884e7dad': 'http://192.168.0.27:80/',
     #          'deadbeef7dad': 'http://192.168.0.10:80/'}
-    KNOWN = {'0017884e7dad': 'http://192.168.0.16:80/',
-             'deadbeef7dad': 'http://192.168.0.10:80/'}
+    # KNOWN = {'0017884e7dad': 'http://192.168.0.16:80/',
+    #          'deadbeef7dad': 'http://192.168.0.10:80/'}
     # KNOWN = None
 
-    print(find_bridges(KNOWN))
+    print(find_bridges())

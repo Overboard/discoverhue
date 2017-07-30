@@ -9,3 +9,8 @@ Bridge.__new__.__defaults__ = (None, ) * len(Bridge._fields)
     icon  - first found icon file
     user  - whitelist ID as provided by user
 """
+
+
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    #     futures = {prior_sn: executor.submit(parse_description_xml, prior_ip)
+    #         for prior_sn, prior_ip in prior_bridges.items()}
