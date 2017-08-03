@@ -135,3 +135,5 @@ ENV/
 
 # Visual Studio Code
 .vscode
+
+dist.bat
