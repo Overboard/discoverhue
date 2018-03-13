@@ -13,7 +13,7 @@ setup(
     name='discoverhue',
     description='Auto discovery of Hue bridges',
     long_description=long_description,
-    version='1.0.1',
+    version='1.0.2',
     url='https://github.com/Overboard/discoverhue',
     author='Overboard',
     license='MIT',

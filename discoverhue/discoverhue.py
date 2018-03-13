@@ -63,6 +63,12 @@ def parse_description_xml(location):
 
     Refer to included example for URLBase and serialNumber elements
     """
+    class _URLBase(str):
+        """ Convenient access to hostname (ip) portion of the URL """
+        @property
+        def hostname(self):
+            return urlsplit(self).hostname
+
     # """TODO: review error handling on xml"""
     # may want to suppress ParseError in the event that it was caused
     # by a none bridge device although this seems unlikely
@@ -85,7 +91,7 @@ def parse_description_xml(location):
 
         # Alternatively, could look directly in the modelDescription field
         if all(x in xml_str.lower() for x in ['philips', 'hue']):
-            return serial, baseip
+            return serial, _URLBase(baseip)
         else:
             return None, None
 
