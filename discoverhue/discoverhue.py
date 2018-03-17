@@ -28,11 +28,12 @@ Enter with optional Serial Numbers and IP's
     If the argument was mutable
         remove matched serial numbers from it
 """
-import logging
 import urllib.request
 from urllib.parse import urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
 import json
+import logging
+logger = logging.getLogger('discoverhue')
 
 if __name__ is not '__main__':
     from discoverhue.ssdp import discover as ssdp_discover
@@ -75,10 +76,10 @@ def parse_description_xml(location):
     try:
         xml_str = from_url(location)
     except urllib.request.HTTPError as error:
-        logging.info("No description for %s: %s", location, error)
+        logger.info("No description for %s: %s", location, error)
         return None, error
     except urllib.request.URLError as error:
-        logging.info("No HTTP server for %s: %s", location, error)
+        logger.info("No HTTP server for %s: %s", location, error)
         return None, error
     else:
         root = ET.fromstring(xml_str)
@@ -102,7 +103,7 @@ def _build_from(baseip):
         ip_address(baseip)
     except ValueError:
         # """attempt to construct url but the ip format has changed"""
-        # logging.warning("Format of internalipaddress changed: %s", baseip)
+        # logger.warning("Format of internalipaddress changed: %s", baseip)
         if 'http' not in baseip[0:4].lower():
             baseip = urlunsplit(['http', baseip, '', '', ''])
         spl = urlsplit(baseip)
@@ -127,10 +128,10 @@ def parse_portal_json():
     try:
         json_str = from_url('https://www.meethue.com/api/nupnp')
     except urllib.request.HTTPError as error:
-        logging.error("Problem at portal: %s", error)
+        logger.error("Problem at portal: %s", error)
         raise
     except urllib.request.URLError as error:
-        logging.warning("Problem reaching portal: %s", error)
+        logger.warning("Problem reaching portal: %s", error)
         return []
     else:
         portal_list = []
@@ -151,7 +152,7 @@ def via_upnp():
     #with open("ssdp.pickle", "wb") as f:
         #pickle.dump(ssdp_list,f)
     bridges_from_ssdp = [u for u in ssdp_list if 'IpBridge' in u.server]
-    logging.info('SSDP returned %d items with %d Hue bridges(s).',
+    logger.info('SSDP returned %d items with %d Hue bridges(s).',
                  len(ssdp_list), len(bridges_from_ssdp))
     # Confirm SSDP gave an accessible bridge device by reading from the returned
     # location.  Should look like: http://192.168.0.1:80/description.xml
@@ -161,7 +162,7 @@ def via_upnp():
         if serial:
             found_bridges[serial] = bridge_info
 
-    logging.debug('%s', found_bridges)
+    logger.debug('%s', found_bridges)
     if found_bridges:
         return found_bridges
     else:
@@ -170,7 +171,7 @@ def via_upnp():
 def via_nupnp():
     """ Use method 2 as described by the Philips guide """
     bridges_from_portal = parse_portal_json()
-    logging.info('Portal returned %d Hue bridges(s).',
+    logger.info('Portal returned %d Hue bridges(s).',
                  len(bridges_from_portal))
     # Confirm Portal gave an accessible bridge device by reading from the returned
     # location.  Should look like: http://192.168.0.1/description.xml
@@ -180,7 +181,7 @@ def via_nupnp():
         if serial:
             found_bridges[serial] = bridge_info
 
-    logging.debug('%s', found_bridges)
+    logger.debug('%s', found_bridges)
     if found_bridges:
         return found_bridges
     else:
@@ -188,7 +189,7 @@ def via_nupnp():
 
 def via_scan():
     """ IP scan - not implemented """
-    logging.warning("IP scan not implemented")
+    logger.warning("IP scan not implemented")
     raise DiscoveryError()
 
 def find_bridges(prior_bridges=None):
@@ -219,7 +220,7 @@ def find_bridges(prior_bridges=None):
                     found_bridges[serial] = baseip
                 else:
                     # nothing usable at that ip
-                    logging.info('%s not found at %s', prior_sn, prior_ip)
+                    logger.info('%s not found at %s', prior_sn, prior_ip)
         run_discovery = found_bridges.keys() != prior_bridges.keys()
 
     # prior_bridges is None, unknown, dict of unfound SNs, or empty dict
@@ -235,7 +236,7 @@ def find_bridges(prior_bridges=None):
                 try:
                     found_bridges.update(via_scan())
                 except DiscoveryError:
-                    logging.warning("All discovery methods returned nothing")
+                    logger.warning("All discovery methods returned nothing")
 
     if prior_bridges:
         # prior_bridges is either single SN or dict of unfound SNs
@@ -245,7 +246,7 @@ def find_bridges(prior_bridges=None):
         except TypeError:
             # user passed an invalid type for key
             # presumably it's a dict meant for alternate mode
-            logging.debug('Assuming alternate mode, prior_bridges is type %s.',
+            logger.debug('Assuming alternate mode, prior_bridges is type %s.',
                           type(prior_bridges))
         except KeyError:
             # user provided Serial Number was not found
@@ -259,13 +260,13 @@ def find_bridges(prior_bridges=None):
         # Filter the found list to subset of prior
         prior_bridges_keys = set(prior_bridges)
         keys_to_remove = prior_bridges_keys ^ found_bridges.keys()
-        logging.debug('Removing %s from found_bridges', keys_to_remove)
+        logger.debug('Removing %s from found_bridges', keys_to_remove)
         for key in keys_to_remove:
             found_bridges.pop(key, None)
 
         # Filter the prior dict to unfound only
         keys_to_remove = prior_bridges_keys & found_bridges.keys()
-        logging.debug('Removing %s from prior_bridges', keys_to_remove)
+        logger.debug('Removing %s from prior_bridges', keys_to_remove)
         for key in keys_to_remove:
             try:
                 prior_bridges.pop(key, None)
@@ -278,7 +279,7 @@ def find_bridges(prior_bridges=None):
 
         keys_to_report = prior_bridges_keys - found_bridges.keys()
         for serial in keys_to_report:
-            logging.warning('Could not locate bridge with Serial ID %s', serial)
+            logger.warning('Could not locate bridge with Serial ID %s', serial)
 
     else:
         # prior_bridges is None or empty dict, return all found
@@ -288,7 +289,7 @@ def find_bridges(prior_bridges=None):
 
 if __name__ == '__main__':
     from ssdp import discover as ssdp_discover
-    logging.basicConfig(level=logging.DEBUG,                                                 \
+    logging.basicConfig(level=logging.INFO,                                                 \
         format='%(asctime)s.%(msecs)03d %(levelname)s:%(module)s:%(funcName)s: %(message)s', \
         datefmt="%Y-%m-%d %H:%M:%S")
 
