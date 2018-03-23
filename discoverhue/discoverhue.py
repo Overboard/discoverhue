@@ -1,7 +1,7 @@
 """ Auto discovery of Hue bridges
 
-Implements UPnP, N-PnP, and ?Manual? methods.
-Does not implement IP Scan.
+Implements UPnP, N-PnP, and IP Scan methods.
+TODO: consider allowing a single IP as parameter for validation
 
 Reference:
 https://developers.meethue.com/documentation/hue-bridge-discovery
@@ -188,9 +188,35 @@ def via_nupnp():
         raise DiscoveryError('Portal returned nothing')
 
 def via_scan():
-    """ IP scan - not implemented """
-    logger.warning("IP scan not implemented")
-    raise DiscoveryError()
+    """ IP scan - now implemented """
+    import socket
+    import ipaddress
+    import httpfind
+    bridges_from_scan = []
+    hosts = socket.gethostbyname_ex(socket.gethostname())[2]
+    for host in hosts:
+        bridges_from_scan += httpfind.survey(
+            # TODO: how do we determine subnet configuration?
+            ipaddress.ip_interface(host+'/24').network,
+            path='description.xml',
+            pattern='(P|p)hilips')
+        logger.info('Scan on %s', host)
+    logger.info('Scan returned %d Hue bridges(s).', len(bridges_from_scan))
+    # Confirm Scan gave an accessible bridge device by reading from the returned
+    # location.  Should look like: http://192.168.0.1/description.xml
+    found_bridges = {}
+    for bridge in bridges_from_scan:
+        serial, bridge_info = parse_description_xml(bridge)
+        if serial:
+            found_bridges[serial] = bridge_info
+
+    logger.debug('%s', found_bridges)
+    if found_bridges:
+        return found_bridges
+    else:
+        raise DiscoveryError('Scan returned nothing')
+
+    # TODO: consolidate common code in the 3 via_* routines
 
 def find_bridges(prior_bridges=None):
     """ Confirm or locate IP addresses of Philips Hue bridges.
@@ -306,4 +332,11 @@ if __name__ == '__main__':
     #          'deadbeef7dad': 'http://192.168.0.10:80/'}
     # KNOWN = None
 
-    print(find_bridges())
+    logging.info('Start via_upnp')
+    print(via_upnp())
+    logging.info('Start via_nupnp')
+    print(via_nupnp())
+    logging.info('Start via_scan')
+    print(via_scan())
+    logging.info('Stop')
+    # print(find_bridges())

@@ -16,6 +16,7 @@ setup(
     version='1.0.2',
     url='https://github.com/Overboard/discoverhue',
     author='Overboard',
+    author_email='amwroute-git@yahoo.com',
     license='MIT',
 
     classifiers=[
@@ -30,4 +31,7 @@ setup(
 
     keywords='philips hue',
     packages=['discoverhue'],
+
+    install_requires=['httpfind'],
+
 )

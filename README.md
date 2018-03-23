@@ -10,7 +10,7 @@ be filtered.  Alternatively, serial numbers and last known IP addresses pairs
 may be provided.  In this case, the provided addresses will be checked first
 and the discovery methods will only be executed if unmatched bridges remain.
 
-Currently, *discoverhue* implements options one and two of the Hue Bridge
+Currently, *discoverhue* implements options one,two, and three of the Hue Bridge
 Discovery Guide available with registration at 
 [MeetHue](https://developers.meethue.com/application-design-guidance).
 
